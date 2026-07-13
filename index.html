@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>کاتالوگ کافه معدن</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.min.js"></script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#ece7df;
+    font-family:tahoma,sans-serif;
+}
+
+body{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.wrapper{
+    position:relative;
+    width:min(95vw,1400px);
+    height:min(92vh,900px);
+}
+
+#book{
+    width:100%;
+    height:100%;
+    direction: ltr !important;
+}
+
+.page{
+    background:white;
+    overflow:hidden;
+}
+
+/* صفحه فرضی و شفاف برای شبیه‌سازی جلد بسته */
+.page.fake-transparent {
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+}
+
+.page img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+    user-select:none;
+    -webkit-user-drag:none;
+}
+
+.nav{
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    width:60px;
+    height:60px;
+    border:none;
+    border-radius:50%;
+    background:#fff;
+    box-shadow:0 6px 20px rgba(0,0,0,.15);
+    cursor:pointer;
+    z-index:9999;
+    font-size:30px;
+    transition:.2s;
+}
+
+.nav:hover{
+    transform:translateY(-50%) scale(1.08);
+}
+
+.prev{
+    left:-70px;
+}
+
+.next{
+    right:-70px;
+}
+
+.loader{
+    position:fixed;
+    inset:0;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:#ece7df;
+    font-size:22px;
+    z-index:99999;
+}
+
+@media(max-width:768px){
+
+    .wrapper{
+        width:100vw;
+        height:100vh;
+    }
+
+    .nav{
+        width:48px;
+        height:48px;
+        font-size:22px;
+    }
+
+    .prev{
+        left:8px;
+    }
+
+    .next{
+        right:8px;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="loader" id="loader">
+    در حال بارگذاری کاتالوگ...
+</div>
+
+<div class="wrapper">
+
+    <button class="nav prev" id="prevBtn">
+        ❮
+    </button>
+
+    <div id="book" dir="ltr"></div>
+
+    <button class="nav next" id="nextBtn">
+        ❯
+    </button>
+
+</div>
+
+<script>
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+let flipBook = null;
+
+async function buildBook(){
+
+const pdf = await pdfjsLib
+    .getDocument("./catalog.pdf")
+    .promise;
+
+
+    const book =
+        document.getElementById("book");
+
+    const scale =
+        window.devicePixelRatio > 1.5
+            ? 2
+            : 1.5;
+
+    const pages = [];
+
+    for(let i = 1; i <= pdf.numPages; i++){
+
+        const page = await pdf.getPage(i);
+
+        const viewport =
+            page.getViewport({ scale });
+
+        const canvas =
+            document.createElement("canvas");
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({
+            canvasContext: canvas.getContext("2d"),
+            viewport
+        }).promise;
+
+        pages.push(
+            canvas.toDataURL("image/jpeg",0.95)
+        );
+    }
+
+    /* --- تغییر اصلی ۱: ساخت صفحه نامرئی ابتدایی برای شبیه‌سازی جلد بسته کاتالوگ چپ به راست --- */
+    const firstFakePage = document.createElement("div");
+    firstFakePage.className = "page fake-transparent";
+    book.appendChild(firstFakePage);
+
+    // اضافه کردن صفحات واقعی کاتالوگ
+    pages.forEach((src,index)=>{
+
+        const page =
+            document.createElement("div");
+
+        page.className = "page";
+
+        const img =
+            document.createElement("img");
+
+        img.src = src;
+
+        page.appendChild(img);
+        book.appendChild(page);
+
+    });
+
+    /* --- تغییر اصلی ۲: ساخت صفحه نامرئی انتهایی در صورتی که تعداد صفحات فرد باشد تا لنگه آخر هم بسته بماند --- */
+    if ((pages.length + 1) % 2 !== 0) {
+        const lastFakePage = document.createElement("div");
+        lastFakePage.className = "page fake-transparent";
+        book.appendChild(lastFakePage);
+    }
+
+    await new Promise(resolve =>
+        requestAnimationFrame(resolve)
+    );
+
+    flipBook = new St.PageFlip(book,{
+
+        width:500,
+        height:700,
+
+        size:"stretch",
+
+        minWidth:280,
+        maxWidth:1000,
+
+        minHeight:400,
+        maxHeight:1400,
+
+        autoSize:true,
+
+        usePortrait:true,
+
+        /* --- تغییر اصلی ۳: غیرفعال کردن آپشن پیش‌فرض شوکاور برای یکسان‌سازی انیمیشن تمام برگه‌ها --- */
+        showCover: false, 
+
+        flippingTime:1000,
+
+        maxShadowOpacity:0.35,
+
+        drawShadow:true,
+
+        mobileScrollSupport:true,
+
+        showPageCorners:true, 
+
+        startZIndex:10
+
+    });
+
+    flipBook.loadFromHTML(
+        [...document.querySelectorAll(".page")]
+    );
+
+    document.getElementById("loader")
+        .style.display = "none";
+
+}
+
+buildBook();
+
+document
+.getElementById("nextBtn")
+.onclick = ()=>{
+    if(flipBook)
+        flipBook.flipNext(); 
+};
+
+document
+.getElementById("prevBtn")
+.onclick = ()=>{
+    if(flipBook)
+        flipBook.flipPrev(); 
+};
+
+document.addEventListener("keydown",e=>{
+
+    if(!flipBook) return;
+
+    if(e.key==="ArrowLeft"){
+        flipBook.flipPrev(); 
+    }
+
+    if(e.key==="ArrowRight"){
+        flipBook.flipNext(); 
+    }
+
+});
+
+let resizeTimer;
+
+window.addEventListener("resize",()=>{
+
+    clearTimeout(resizeTimer);
+
+    resizeTimer = setTimeout(()=>{
+
+        if(flipBook){
+            flipBook.update();
+        }
+
+    },300);
+
+});
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+
+</body>
+</html>
